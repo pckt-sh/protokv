@@ -1,0 +1,91 @@
+syntax = "proto3";
+
+package protokvtest.v1;
+
+import "protokv/meilisearch/v1/meilisearch.proto";
+import "protokv/v1/protokv.proto";
+
+option go_package = "github.com/pckt-sh/protokv/internal/testpb;testpb";
+
+enum Region {
+  REGION_UNSPECIFIED = 0;
+  REGION_US = 1 [(protokv.v1.value).name = "US"];
+  REGION_EU_VAT = 2 [(protokv.v1.value).name = "EU.VAT-REGISTERED"];
+  REGION_ASIA = 3;
+}
+
+message Product {
+  option (protokv.v1.storage) = {
+    prefix: "product:{pk}"
+    primaryKey: "id"
+    indexPrefix: "index:product:{index}"
+    indexes: ["slug"]
+    relations: [
+      "rank",
+      "price"
+    ]
+  };
+  option (protokv.meilisearch.v1.index) = {
+    name: "products"
+    fields: [
+      "id",
+      "title",
+      "sku:sku:split=/",
+      "rank:rank.rank",
+      "tags:variants.#.tag"
+    ]
+    searchable: [
+      "title",
+      "sku"
+    ]
+    relations: ["rank"]
+  };
+
+  string id = 1;
+  string title = 2;
+  string slug = 3;
+  string sku = 4;
+  repeated Variant variants = 5;
+  ProductRank rank = 6;
+  Price price = 7;
+}
+
+message Variant {
+  string tag = 1;
+}
+
+message ProductRank {
+  option (protokv.v1.storage) = {
+    prefix: "product:rank:{pk}"
+    primaryKey: "id"
+  };
+
+  string id = 1;
+  int64 rank = 2;
+}
+
+message Price {
+  option (protokv.v1.storage) = {
+    prefix: "price:{region}:{pk}"
+    primaryKey: "id"
+  };
+
+  string id = 1;
+  Region region = 2;
+  int64 amount = 3;
+}
+
+message Item {
+  option (protokv.v1.storage) = {
+    prefix: "item:{pk}"
+    primaryKey: "id"
+  };
+
+  int64 id = 1;
+  string title = 2;
+}
+
+// Plain has no storage option.
+message Plain {
+  string id = 1;
+}

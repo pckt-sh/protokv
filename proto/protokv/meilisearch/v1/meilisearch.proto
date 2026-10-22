@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package protokv.meilisearch.v1;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/pckt-sh/protokv/gen/go/protokv/meilisearch/v1;meilisearchv1";
+
+// Index syncs the stored messages of a type into a Meilisearch index.
+// The message must also have a (protokv.v1.storage) option.
+message Index {
+  // Index name in Meilisearch
+  string name = 1;
+
+  // Fields that should be synchronized (format: `<name>:<json_path>`)
+  repeated string fields = 2;
+
+  // Searchable fields by name
+  repeated string searchable = 3;
+
+  // Filterable fields by name
+  repeated string filterable = 4;
+
+  // Sortable fields by name
+  repeated string sortable = 5;
+
+  // Ranking rules, if empty, leave the default rules
+  repeated string rankingRules = 6;
+
+  // Pagination limits, default at 1,000
+  int64 maxTotalHits = 7;
+
+  // Maximum acceptable duration to perform a search query, default 1,500ms
+  int64 searchCutoffMs = 8;
+
+  // Relations to load, if any
+  repeated string relations = 9;
+
+  // Values of the key placeholders, used to scan messages and load relations
+  map<string, string> options = 10;
+}
+
+// 51643 isn't in the global extension registry: it's in the range for
+// private use, next to (protokv.v1.storage).
+extend google.protobuf.MessageOptions {
+  Index index = 51643;
+}

@@ -1,0 +1,16 @@
+version: v2
+modules:
+  - path: proto
+    name: buf.build/pckt/protokv
+  # Test fixtures for the Go packages, never pushed to the BSR.
+  - path: internal/testdata/proto
+lint:
+  use:
+    - STANDARD
+  except:
+    # Field names stay camelCase so existing `option (storage) = { primaryKey: ... }`
+    # literals keep compiling.
+    - FIELD_LOWER_SNAKE_CASE
+breaking:
+  use:
+    - FILE

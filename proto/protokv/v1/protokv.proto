@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package protokv.v1;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/pckt-sh/protokv/gen/go/protokv/v1;protokvv1";
+
+// Storage defines options for storing a protobuf message
+message Storage {
+  // Defines the primary key for storing message
+  string primaryKey = 1;
+
+  // Defines the key template, see `{pk}` and `{field}` placeholders
+  string prefix = 2;
+
+  // Defines the key prefix of secondary indexes, `{index}` is the index name
+  string indexPrefix = 3;
+
+  // Defines fields that should be indexed
+  repeated string indexes = 4;
+
+  // Defines the fields that should be eager-loaded
+  repeated string relations = 5;
+}
+
+// EnumValue defines options for an enum value
+message EnumValue {
+  // Name used for the value in keys, instead of its full name
+  string name = 1;
+}
+
+// 51642 isn't in the global extension registry: it's in the range for
+// private use, picked away from 50000 to make collisions unlikely.
+extend google.protobuf.MessageOptions {
+  Storage storage = 51642;
+}
+
+extend google.protobuf.EnumValueOptions {
+  EnumValue value = 51642;
+}
