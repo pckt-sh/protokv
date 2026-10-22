@@ -7,6 +7,7 @@ Describe how protobuf messages are stored in a key-value store and indexed in Me
   - `schema`: reads the options (key templates, indexes, relations, enum names)
   - `kv`: stores messages in Kvrocks, Redis or any Redis-compatible server
   - `meilisearch`: syncs stored messages into Meilisearch
+- **`kvlens`:** a terminal UI to browse the stored messages
 
 ## Define your models
 
@@ -144,6 +145,33 @@ protokvmeili.RegisterOperation("trim_suffix", func(value any, arg string) any {
 	return value
 })
 ```
+
+## Browse stored data
+
+`kvlens` is a terminal UI for the stored messages. Its sidebar lists every model with a storage option. The main view lists a model's keys; open one to see the decoded record, with one tab per relation.
+
+```sh
+go install github.com/pckt-sh/protokv/cmd/kvlens@latest
+
+buf build -o models.binpb   # in the repository of your .proto files
+KV_URL=redis://localhost:6666 KVLENS_DESCRIPTORS=models.binpb kvlens
+```
+
+| Variable | Flag | |
+|---|---|---|
+| `KV_URL`, then `KVROCKS_URL`, `REDIS_URL` | `-url` | Database URL |
+| `KVLENS_DESCRIPTORS` | `-descriptors` | Comma-separated buf images or FileDescriptorSets |
+
+| Key | |
+|---|---|
+| `↑↓` `enter` | Pick a model, browse its keys, open a record |
+| `/` | Filter keys by primary key glob (`abc*`), or look up an index (`slug=my-product`) |
+| `o` | Set placeholder values, like `region=US` for `price:{region}:{pk}` |
+| `tab` | In a record, switch between the record and its relations |
+| `enter` | On a relation, navigate to it |
+| `esc` | Close the record, go back |
+
+Placeholders default to the `options` of the model's `(protokv.meilisearch.v1.index)`. A relation's placeholders are also filled from the fields of the record that have the same name.
 
 ## Options reference
 
