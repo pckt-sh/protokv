@@ -26,11 +26,11 @@ const (
 type Storage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Defines the primary key for storing message
-	PrimaryKey string `protobuf:"bytes,1,opt,name=primaryKey,proto3" json:"primaryKey,omitempty"`
+	PrimaryKey string `protobuf:"bytes,1,opt,name=primary_key,json=primaryKey,proto3" json:"primary_key,omitempty"`
 	// Defines the key template, see `{pk}` and `{field}` placeholders
 	Prefix string `protobuf:"bytes,2,opt,name=prefix,proto3" json:"prefix,omitempty"`
 	// Defines the key prefix of secondary indexes, `{index}` is the index name
-	IndexPrefix string `protobuf:"bytes,3,opt,name=indexPrefix,proto3" json:"indexPrefix,omitempty"`
+	IndexPrefix string `protobuf:"bytes,3,opt,name=index_prefix,json=indexPrefix,proto3" json:"index_prefix,omitempty"`
 	// Defines fields that should be indexed
 	Indexes []string `protobuf:"bytes,4,rep,name=indexes,proto3" json:"indexes,omitempty"`
 	// Defines the fields that should be eager-loaded
@@ -186,13 +186,12 @@ var File_protokv_v1_protokv_proto protoreflect.FileDescriptor
 const file_protokv_v1_protokv_proto_rawDesc = "" +
 	"\n" +
 	"\x18protokv/v1/protokv.proto\x12\n" +
-	"protokv.v1\x1a google/protobuf/descriptor.proto\"\x9b\x01\n" +
-	"\aStorage\x12\x1e\n" +
-	"\n" +
-	"primaryKey\x18\x01 \x01(\tR\n" +
+	"protokv.v1\x1a google/protobuf/descriptor.proto\"\x9d\x01\n" +
+	"\aStorage\x12\x1f\n" +
+	"\vprimary_key\x18\x01 \x01(\tR\n" +
 	"primaryKey\x12\x16\n" +
-	"\x06prefix\x18\x02 \x01(\tR\x06prefix\x12 \n" +
-	"\vindexPrefix\x18\x03 \x01(\tR\vindexPrefix\x12\x18\n" +
+	"\x06prefix\x18\x02 \x01(\tR\x06prefix\x12!\n" +
+	"\findex_prefix\x18\x03 \x01(\tR\vindexPrefix\x12\x18\n" +
 	"\aindexes\x18\x04 \x03(\tR\aindexes\x12\x1c\n" +
 	"\trelations\x18\x05 \x03(\tR\trelations\"\x1f\n" +
 	"\tEnumValue\x12\x12\n" +

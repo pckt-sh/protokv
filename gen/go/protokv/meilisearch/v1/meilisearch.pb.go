@@ -37,11 +37,11 @@ type Index struct {
 	// Sortable fields by name
 	Sortable []string `protobuf:"bytes,5,rep,name=sortable,proto3" json:"sortable,omitempty"`
 	// Ranking rules, if empty, leave the default rules
-	RankingRules []string `protobuf:"bytes,6,rep,name=rankingRules,proto3" json:"rankingRules,omitempty"`
+	RankingRules []string `protobuf:"bytes,6,rep,name=ranking_rules,json=rankingRules,proto3" json:"ranking_rules,omitempty"`
 	// Pagination limits, default at 1,000
-	MaxTotalHits int64 `protobuf:"varint,7,opt,name=maxTotalHits,proto3" json:"maxTotalHits,omitempty"`
+	MaxTotalHits int64 `protobuf:"varint,7,opt,name=max_total_hits,json=maxTotalHits,proto3" json:"max_total_hits,omitempty"`
 	// Maximum acceptable duration to perform a search query, default 1,500ms
-	SearchCutoffMs int64 `protobuf:"varint,8,opt,name=searchCutoffMs,proto3" json:"searchCutoffMs,omitempty"`
+	SearchCutoffMs int64 `protobuf:"varint,8,opt,name=search_cutoff_ms,json=searchCutoffMs,proto3" json:"search_cutoff_ms,omitempty"`
 	// Relations to load, if any
 	Relations []string `protobuf:"bytes,9,rep,name=relations,proto3" json:"relations,omitempty"`
 	// Values of the key placeholders, used to scan messages and load relations
@@ -171,7 +171,7 @@ var File_protokv_meilisearch_v1_meilisearch_proto protoreflect.FileDescriptor
 
 const file_protokv_meilisearch_v1_meilisearch_proto_rawDesc = "" +
 	"\n" +
-	"(protokv/meilisearch/v1/meilisearch.proto\x12\x16protokv.meilisearch.v1\x1a google/protobuf/descriptor.proto\"\x9f\x03\n" +
+	"(protokv/meilisearch/v1/meilisearch.proto\x12\x16protokv.meilisearch.v1\x1a google/protobuf/descriptor.proto\"\xa4\x03\n" +
 	"\x05Index\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n" +
 	"\x06fields\x18\x02 \x03(\tR\x06fields\x12\x1e\n" +
@@ -181,10 +181,10 @@ const file_protokv_meilisearch_v1_meilisearch_proto_rawDesc = "" +
 	"\n" +
 	"filterable\x18\x04 \x03(\tR\n" +
 	"filterable\x12\x1a\n" +
-	"\bsortable\x18\x05 \x03(\tR\bsortable\x12\"\n" +
-	"\frankingRules\x18\x06 \x03(\tR\frankingRules\x12\"\n" +
-	"\fmaxTotalHits\x18\a \x01(\x03R\fmaxTotalHits\x12&\n" +
-	"\x0esearchCutoffMs\x18\b \x01(\x03R\x0esearchCutoffMs\x12\x1c\n" +
+	"\bsortable\x18\x05 \x03(\tR\bsortable\x12#\n" +
+	"\rranking_rules\x18\x06 \x03(\tR\frankingRules\x12$\n" +
+	"\x0emax_total_hits\x18\a \x01(\x03R\fmaxTotalHits\x12(\n" +
+	"\x10search_cutoff_ms\x18\b \x01(\x03R\x0esearchCutoffMs\x12\x1c\n" +
 	"\trelations\x18\t \x03(\tR\trelations\x12D\n" +
 	"\aoptions\x18\n" +
 	" \x03(\v2*.protokv.meilisearch.v1.Index.OptionsEntryR\aoptions\x1a:\n" +

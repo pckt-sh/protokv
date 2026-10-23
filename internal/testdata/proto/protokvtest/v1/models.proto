@@ -17,8 +17,8 @@ enum Region {
 message Product {
   option (protokv.v1.storage) = {
     prefix: "product:{pk}"
-    primaryKey: "id"
-    indexPrefix: "index:product:{index}"
+    primary_key: "id"
+    index_prefix: "index:product:{index}"
     indexes: ["slug"]
     relations: [
       "rank",
@@ -57,7 +57,7 @@ message Variant {
 message ProductRank {
   option (protokv.v1.storage) = {
     prefix: "product:rank:{pk}"
-    primaryKey: "id"
+    primary_key: "id"
   };
 
   string id = 1;
@@ -67,7 +67,7 @@ message ProductRank {
 message Price {
   option (protokv.v1.storage) = {
     prefix: "price:{region}:{pk}"
-    primaryKey: "id"
+    primary_key: "id"
   };
 
   string id = 1;
@@ -78,7 +78,7 @@ message Price {
 message Item {
   option (protokv.v1.storage) = {
     prefix: "item:{pk}"
-    primaryKey: "id"
+    primary_key: "id"
   };
 
   int64 id = 1;

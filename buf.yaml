@@ -7,10 +7,6 @@ modules:
 lint:
   use:
     - STANDARD
-  except:
-    # Field names stay camelCase so existing `option (storage) = { primaryKey: ... }`
-    # literals keep compiling.
-    - FIELD_LOWER_SNAKE_CASE
 breaking:
   use:
     - FILE

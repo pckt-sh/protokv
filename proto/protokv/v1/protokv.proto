@@ -9,13 +9,13 @@ option go_package = "github.com/pckt-sh/protokv/gen/go/protokv/v1;protokvv1";
 // Storage defines options for storing a protobuf message
 message Storage {
   // Defines the primary key for storing message
-  string primaryKey = 1;
+  string primary_key = 1;
 
   // Defines the key template, see `{pk}` and `{field}` placeholders
   string prefix = 2;
 
   // Defines the key prefix of secondary indexes, `{index}` is the index name
-  string indexPrefix = 3;
+  string index_prefix = 3;
 
   // Defines fields that should be indexed
   repeated string indexes = 4;

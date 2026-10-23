@@ -25,13 +25,13 @@ message Index {
   repeated string sortable = 5;
 
   // Ranking rules, if empty, leave the default rules
-  repeated string rankingRules = 6;
+  repeated string ranking_rules = 6;
 
   // Pagination limits, default at 1,000
-  int64 maxTotalHits = 7;
+  int64 max_total_hits = 7;
 
   // Maximum acceptable duration to perform a search query, default 1,500ms
-  int64 searchCutoffMs = 8;
+  int64 search_cutoff_ms = 8;
 
   // Relations to load, if any
   repeated string relations = 9;
