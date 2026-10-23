@@ -298,4 +298,12 @@ func TestOptions(t *testing.T) {
 
 	h.press("enter")
 	h.expect(`"amount": "999"`, `"region": "REGION_US"`)
+
+	// Options are shared: back to the sidebar, the product's price
+	// relation uses the same region.
+	h.press("esc", "esc", "down", "enter", "enter", "tab", "tab")
+	h.expect("price:US:1", `"amount": "999"`)
+
+	h.press("esc")
+	h.expect("region=US")
 }

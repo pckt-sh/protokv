@@ -171,7 +171,7 @@ KV_URL=redis://localhost:6666 KVLENS_DESCRIPTORS=models.binpb kvlens
 | `enter` | On a relation, navigate to it |
 | `esc` | Close the record, go back |
 
-Placeholders default to the `options` of the model's `(protokv.meilisearch.v1.index)`. A relation's placeholders are also filled from the fields of the record that have the same name.
+Placeholder values are shared by every model, and default to the `options` of the models' `(protokv.meilisearch.v1.index)`. A relation's placeholders are also filled from the fields of the record that have the same name.
 
 ## Options reference
 

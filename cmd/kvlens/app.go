@@ -35,7 +35,6 @@ const (
 type level struct {
 	title   string
 	storage schema.Storage
-	options map[string]string
 	filter  string
 
 	keys    []string
@@ -80,6 +79,9 @@ type app struct {
 	models []schema.Storage
 	st     styles
 
+	// options fill key placeholders, shared by every model.
+	options map[string]string
+
 	selected int
 	focus    focus
 	stack    []*level
@@ -105,6 +107,8 @@ func newApp(db kv.Client, url string, models []schema.Storage) *app {
 		models: models,
 		st:     newStyles(),
 		input:  input,
+
+		options: defaultOptions(models),
 	}
 
 	return a
@@ -123,17 +127,31 @@ func (a *app) openModel(idx int) tea.Cmd {
 	a.selected = idx
 	s := a.models[idx]
 
-	// Meilisearch options are the values used to load relations,
-	// a good default for the placeholders too.
-	options := map[string]string{}
-	if opts := s.GetDescriptor().Options(); proto.HasExtension(opts, meilisearchv1.E_Index) {
-		maps.Copy(options, proto.GetExtension(opts, meilisearchv1.E_Index).(*meilisearchv1.Index).GetOptions())
-	}
-
-	lvl := &level{title: shortName(s.GetName()), storage: s, options: options}
+	lvl := &level{title: shortName(s.GetName()), storage: s}
 	a.stack = []*level{lvl}
 
 	return a.reload(lvl)
+}
+
+// defaultOptions merges the Meilisearch options of the models: they
+// are the values used to load relations, a good default for the
+// placeholders too. The first model setting an option wins.
+func defaultOptions(models []schema.Storage) map[string]string {
+	options := map[string]string{}
+	for _, s := range models {
+		opts := s.GetDescriptor().Options()
+		if !proto.HasExtension(opts, meilisearchv1.E_Index) {
+			continue
+		}
+
+		for k, v := range proto.GetExtension(opts, meilisearchv1.E_Index).(*meilisearchv1.Index).GetOptions() {
+			if _, ok := options[k]; !ok {
+				options[k] = v
+			}
+		}
+	}
+
+	return options
 }
 
 func (a *app) current() *level {
@@ -165,7 +183,7 @@ func (a *app) loadPage(lvl *level) tea.Cmd {
 
 	var (
 		db                         = a.db
-		s, options, filter, cursor = lvl.storage, maps.Clone(lvl.options), lvl.filter, lvl.scan
+		s, options, filter, cursor = lvl.storage, maps.Clone(a.options), lvl.filter, lvl.scan
 		gen                        = lvl.gen
 	)
 
@@ -181,7 +199,7 @@ func (a *app) openSheet(lvl *level, key string) tea.Cmd {
 	a.sheet = sh
 	a.resizeSheet()
 
-	db, s, options := a.db, lvl.storage, maps.Clone(lvl.options)
+	db, s, options := a.db, lvl.storage, maps.Clone(a.options)
 	return func() tea.Msg {
 		return recordMsg{sheet: sh, tabs: loadRecord(db, s, key, options)}
 	}
@@ -315,7 +333,7 @@ func (a *app) updateMain(msg tea.KeyPressMsg) tea.Cmd {
 			return a.startInput(inputFilter, lvl.filter, "pk glob, or index=value")
 		}
 	case "o":
-		return a.startInput(inputOptions, formatOptions(lvl.options), "placeholder=value, …")
+		return a.startInput(inputOptions, formatOptions(a.options), "placeholder=value, …")
 	}
 
 	if !lvl.done && lvl.cursor >= len(lvl.keys)-a.listHeight()/2 {
@@ -358,7 +376,7 @@ func (a *app) updateInput(msg tea.KeyPressMsg) tea.Cmd {
 		if mode == inputFilter {
 			lvl.filter = strings.TrimSpace(a.input.Value())
 		} else {
-			lvl.options = parseOptions(a.input.Value())
+			a.options = parseOptions(a.input.Value())
 		}
 
 		return a.reload(lvl)
@@ -402,7 +420,6 @@ func (a *app) updateSheet(msg tea.KeyPressMsg) tea.Cmd {
 		lvl := &level{
 			title:   t.name,
 			storage: t.storage,
-			options: maps.Clone(sh.level.options),
 			keys:    []string{t.key},
 			fixed:   true,
 			done:    true,
@@ -607,11 +624,11 @@ func (a *app) levelInfo(lvl *level, w int) string {
 	if lvl.filter != "" {
 		parts = append(parts, "filter "+lvl.filter)
 	}
-	if len(lvl.options) > 0 {
-		parts = append(parts, formatOptions(lvl.options))
+	if len(a.options) > 0 {
+		parts = append(parts, formatOptions(a.options))
 	}
 	if !lvl.fixed {
-		parts = append(parts, scanPattern(lvl.storage, lvl.options, lvl.filter))
+		parts = append(parts, scanPattern(lvl.storage, a.options, lvl.filter))
 	}
 
 	return a.st.muted.Render(truncate(strings.Join(parts, "  ·  "), w))
