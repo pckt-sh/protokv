@@ -1,11 +1,13 @@
 package kv
 
 import (
-	"errors"
 	"strconv"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
-var ErrNotFound = errors.New("object not found")
+var ErrNotFound = status.Error(codes.NotFound, "object not found")
 
 type Number interface {
 	~int | ~int8 | ~int16 | ~int32 | ~int64 |
