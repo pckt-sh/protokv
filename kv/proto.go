@@ -3,6 +3,7 @@ package kv
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/pckt-sh/protokv/codec"
 	"github.com/pckt-sh/protokv/schema"
@@ -11,12 +12,13 @@ import (
 )
 
 type ProtoClient struct {
-	c Client
+	c         Client
+	writeOpts []WriteOption
 }
 
 // Proto returns a ProtoClient for manipulating protobuf types
 func (c Client) Proto() ProtoClient {
-	return ProtoClient{c}
+	return ProtoClient{c: c}
 }
 
 // protoMessage represents a protobuf message via pointer.
@@ -147,18 +149,18 @@ func (p ProtoClient) Paginate[T any, PM protoMessage[T]](ctx context.Context, cu
 }
 
 // Set saves a protobuf message into the database, along with its indexes.
-func (p ProtoClient) Set(ctx context.Context, msg proto.Message) error {
-	return p.write(ctx, []proto.Message{msg})
+func (p ProtoClient) Set(ctx context.Context, msg proto.Message, opts ...WriteOption) error {
+	return p.write(ctx, []proto.Message{msg}, opts)
 }
 
 // SetMany saves multiple messages into the database, along with their indexes.
-func (p ProtoClient) SetMany[T proto.Message](ctx context.Context, msgs []T) error {
+func (p ProtoClient) SetMany[T proto.Message](ctx context.Context, msgs []T, opts ...WriteOption) error {
 	entries := make([]proto.Message, len(msgs))
 	for i, msg := range msgs {
 		entries[i] = msg
 	}
 
-	return p.write(ctx, entries)
+	return p.write(ctx, entries, opts)
 }
 
 // write stores messages, and for each of them one key per index that has a value.
@@ -166,34 +168,84 @@ func (p ProtoClient) SetMany[T proto.Message](ctx context.Context, msgs []T) err
 // Indexes are only ever added or overwritten: when an indexed value changes,
 // the entry for the previous value is left behind. Finding it would mean
 // reading back every message being overwritten.
-func (p ProtoClient) write(ctx context.Context, msgs []proto.Message) error {
+//
+// With hooks asking for Previous, or WithSkipUnchanged, the stored headers are
+// read first, in one extra round trip.
+func (p ProtoClient) write(ctx context.Context, msgs []proto.Message, opts []WriteOption) error {
 	if len(msgs) == 0 {
 		return nil
 	}
 
+	o := p.newWriteOptions(opts)
+	now := time.Now()
+
+	ops := make([]WriteOp, len(msgs))
+	storages := make([]schema.Storage, len(msgs))
+	for i, msg := range msgs {
+		storage, err := schema.GetFromMsg(msg)
+		if err != nil {
+			return err
+		}
+
+		value, meta, err := codec.EncodeWithMeta(msg, now)
+		if err != nil {
+			return err
+		}
+
+		storages[i] = storage
+		ops[i] = WriteOp{Key: storage.ToKey(msg), Msg: msg, New: meta, value: value}
+	}
+
+	if o.previous() {
+		if err := p.loadPrevious(ctx, ops); err != nil {
+			return err
+		}
+	}
+
+	if o.skipUnchanged {
+		for i := range ops {
+			ops[i].Skipped = !ops[i].Changed()
+		}
+	}
+
 	_, err := p.c.conn.Pipelined(ctx, func(pipe redis.Pipeliner) error {
-		for _, msg := range msgs {
-			storage, err := schema.GetFromMsg(msg)
-			if err != nil {
+		for _, h := range o.hooks {
+			if h.Before == nil {
+				continue
+			}
+			if err := h.Before(ctx, pipe, ops); err != nil {
 				return err
 			}
+		}
 
-			bytes, err := codec.Encode(msg)
-			if err != nil {
-				return err
+		for i, op := range ops {
+			if op.Skipped {
+				continue
 			}
 
-			pipe.Set(ctx, storage.ToKey(msg), bytes, 0)
+			pipe.Set(ctx, op.Key, op.value, 0)
 
-			if err := storage.SetIndexes(ctx, pipe, msg); err != nil {
+			if err := storages[i].SetIndexes(ctx, pipe, op.Msg); err != nil {
 				return err
 			}
 		}
 
 		return nil
 	})
+	if err != nil {
+		return err
+	}
 
-	return err
+	for _, h := range o.hooks {
+		if h.After == nil {
+			continue
+		}
+		if err := h.After(ctx, ops); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (p ProtoClient) ZRange[T any, PM protoMessage[T]](ctx context.Context, key string, opts ...ZOption) ([]PM, error) {

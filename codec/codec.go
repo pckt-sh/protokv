@@ -58,30 +58,60 @@ type Meta struct {
 
 // Encode marshals msg into a V1 value, stamped with the current time.
 func Encode(msg proto.Message) ([]byte, error) {
-	return EncodeAt(msg, time.Now())
+	b, _, err := EncodeWithMeta(msg, time.Now())
+	return b, err
 }
 
 // EncodeAt marshals msg into a V1 value stamped with ts.
 // A zero ts is stored as 0.
 func EncodeAt(msg proto.Message, ts time.Time) ([]byte, error) {
+	b, _, err := EncodeWithMeta(msg, ts)
+	return b, err
+}
+
+// EncodeWithMeta is EncodeAt, also returning the meta of the new value.
+func EncodeWithMeta(msg proto.Message, ts time.Time) ([]byte, Meta, error) {
 	buf := make([]byte, HeaderSize, HeaderSize+marshalOpts.Size(msg))
 
 	buf, err := marshalOpts.MarshalAppend(buf, msg)
 	if err != nil {
-		return nil, err
+		return nil, Meta{}, err
 	}
+
+	meta := Meta{Version: V1, Hash: xxhash.Sum64(buf[HeaderSize:])}
 
 	var nanos int64
 	if !ts.IsZero() {
 		nanos = ts.UnixNano()
+		meta.Timestamp = time.Unix(0, nanos)
 	}
 
 	buf[0] = Magic
 	buf[1] = V1
 	binary.LittleEndian.PutUint64(buf[2:10], uint64(nanos))
-	binary.LittleEndian.PutUint64(buf[10:18], xxhash.Sum64(buf[HeaderSize:]))
+	binary.LittleEndian.PutUint64(buf[10:18], meta.Hash)
 
-	return buf, nil
+	return buf, meta, nil
+}
+
+// ParseHeader reads the header of a V1 value, without its payload: the
+// checksum isn't verified. It returns false for legacy values, a short
+// input or an unknown version.
+func ParseHeader(b []byte) (Meta, bool) {
+	if len(b) < HeaderSize || b[0] != Magic || b[1] != V1 {
+		return Meta{}, false
+	}
+
+	meta := Meta{
+		Version: V1,
+		Hash:    binary.LittleEndian.Uint64(b[10:18]),
+	}
+
+	if nanos := int64(binary.LittleEndian.Uint64(b[2:10])); nanos != 0 {
+		meta.Timestamp = time.Unix(0, nanos)
+	}
+
+	return meta, true
 }
 
 // Split parses the header of a stored value, verifies its checksum and
@@ -95,31 +125,21 @@ func Split(b []byte) ([]byte, Meta, error) {
 		return nil, Meta{}, ErrCorrupt
 	}
 
-	switch b[1] {
-	case V1:
-		if len(b) < HeaderSize {
-			return nil, Meta{}, ErrCorrupt
-		}
-
-		payload := b[HeaderSize:]
-		meta := Meta{
-			Version: V1,
-			Hash:    binary.LittleEndian.Uint64(b[10:18]),
-		}
-
-		if xxhash.Sum64(payload) != meta.Hash {
-			return nil, Meta{}, ErrChecksum
-		}
-
-		if nanos := int64(binary.LittleEndian.Uint64(b[2:10])); nanos != 0 {
-			meta.Timestamp = time.Unix(0, nanos)
-		}
-
-		return payload, meta, nil
-
-	default:
+	if b[1] != V1 {
 		return nil, Meta{}, ErrUnsupportedVersion
 	}
+
+	meta, ok := ParseHeader(b)
+	if !ok {
+		return nil, Meta{}, ErrCorrupt
+	}
+
+	payload := b[HeaderSize:]
+	if xxhash.Sum64(payload) != meta.Hash {
+		return nil, Meta{}, ErrChecksum
+	}
+
+	return payload, meta, nil
 }
 
 // Decode unmarshals a stored value, of any version, into msg.

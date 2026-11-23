@@ -220,3 +220,30 @@ func BenchmarkDecode(b *testing.B) {
 		}
 	})
 }
+
+func TestParseHeader(t *testing.T) {
+	ts := time.Unix(0, 1_763_900_000_000_000_000)
+	v1, meta, err := EncodeWithMeta(testProduct(), ts)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, ok := ParseHeader(v1[:HeaderSize])
+	if !ok || got.Hash != meta.Hash || !got.Timestamp.Equal(ts) || got.Version != V1 {
+		t.Errorf("ParseHeader = %+v, %v; want %+v", got, ok, meta)
+	}
+
+	raw, _ := proto.Marshal(testProduct())
+	unknown := append([]byte{Magic, 0x02}, v1[2:]...)
+
+	for name, b := range map[string][]byte{
+		"legacy":          raw,
+		"empty":           nil,
+		"short":           v1[:HeaderSize-1],
+		"unknown version": unknown,
+	} {
+		if _, ok := ParseHeader(b); ok {
+			t.Errorf("%s: parsed", name)
+		}
+	}
+}
