@@ -5,6 +5,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/pckt-sh/protokv/codec"
 	"github.com/pckt-sh/protokv/internal/testpb"
 	"google.golang.org/protobuf/proto"
 )
@@ -154,18 +155,29 @@ func TestAssignRelation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	bytes, err := proto.Marshal(&testpb.ProductRank{Id: "123", Rank: 666})
+	rank := &testpb.ProductRank{Id: "123", Rank: 666}
+
+	v0, err := proto.Marshal(rank)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	root := &testpb.Product{Id: "123"}
-	if err := rel.Assign(root, bytes); err != nil {
+	v1, err := codec.Encode(rank)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	if root.GetRank().GetRank() != 666 {
-		t.Error("relation was not assigned")
+	for name, b := range map[string][]byte{"v0": v0, "v1": v1} {
+		t.Run(name, func(t *testing.T) {
+			root := &testpb.Product{Id: "123"}
+			if err := rel.Assign(root, b); err != nil {
+				t.Fatal(err)
+			}
+
+			if root.GetRank().GetRank() != 666 {
+				t.Error("relation was not assigned")
+			}
+		})
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"slices"
 	"sync"
 
+	"github.com/pckt-sh/protokv/codec"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
@@ -107,7 +108,7 @@ func (r Relation) Assign(msg proto.Message, buf []byte) error {
 		return nil
 	}
 
-	if err := proto.Unmarshal(buf, subMsg.Interface()); err != nil {
+	if _, err := codec.Decode(buf, subMsg.Interface()); err != nil {
 		return err
 	}
 

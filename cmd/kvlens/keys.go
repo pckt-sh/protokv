@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pckt-sh/protokv/codec"
 	"github.com/pckt-sh/protokv/kv"
 	"github.com/pckt-sh/protokv/schema"
 	"google.golang.org/protobuf/proto"
@@ -191,7 +192,7 @@ func readMessage(ctx context.Context, db kv.Client, s schema.Storage, key string
 	}
 
 	msg := dynamicpb.NewMessage(s.GetDescriptor())
-	if err := proto.Unmarshal([]byte(raw), msg); err != nil {
+	if _, err := codec.Decode([]byte(raw), msg); err != nil {
 		return nil, len(raw), err
 	}
 

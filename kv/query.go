@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/pckt-sh/protokv/codec"
 	"github.com/pckt-sh/protokv/schema"
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/protobuf/proto"
@@ -15,6 +16,7 @@ type Query struct {
 	storage  schema.Storage
 	rows     []QueryRecord
 	cursor   int
+	meta     codec.Meta
 }
 
 type QueryRecord struct {
@@ -97,6 +99,8 @@ func (dq *Query) Next() bool {
 
 // decode parses the proto.Message
 func (dq *Query) decode(msg proto.Message) error {
+	dq.meta = codec.Meta{}
+
 	idx := max(dq.cursor, 0)
 	if idx >= len(dq.rows) {
 		return ErrNotFound
@@ -111,9 +115,11 @@ func (dq *Query) decode(msg proto.Message) error {
 		return err
 	}
 
-	if err := proto.Unmarshal(b, msg); err != nil {
+	meta, err := codec.Decode(b, msg)
+	if err != nil {
 		return err
 	}
+	dq.meta = meta
 
 	for _, record := range dq.rows[idx].relations {
 		rel, err := dq.storage.GetRelation(record.name)
@@ -128,6 +134,11 @@ func (dq *Query) decode(msg proto.Message) error {
 	}
 
 	return nil
+}
+
+// Meta returns the metadata of the row last loaded by Get or Scan.
+func (dq *Query) Meta() codec.Meta {
+	return dq.meta
 }
 
 // Get loads a obscure `proto.Message`.

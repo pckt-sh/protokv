@@ -4,11 +4,14 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/pckt-sh/protokv/codec"
 	"github.com/pckt-sh/protokv/internal/testpb"
 	"github.com/pckt-sh/protokv/schema"
 	"github.com/redis/go-redis/v9"
+	"google.golang.org/protobuf/proto"
 )
 
 type Tester interface {
@@ -221,6 +224,121 @@ func TestZBatch(t *testing.T) {
 	}
 	if max != 2 {
 		t.Errorf("wrong max, got: %v", max)
+	}
+}
+
+// setLegacy stores msg the way values were written before the codec: raw
+// protobuf bytes, without header.
+func setLegacy(t *testing.T, c Client, key string, msg proto.Message) {
+	t.Helper()
+
+	b, err := proto.Marshal(msg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := c.Conn().Set(t.Context(), key, b, 0).Err(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestReadLegacyValues(t *testing.T) {
+	client := newTestClient(t)
+
+	setLegacy(t, client, "product:1", &testpb.Product{Id: "1", Title: "Legacy"})
+	setLegacy(t, client, "product:rank:1", &testpb.ProductRank{Id: "1", Rank: 7})
+	if err := client.Proto().Set(t.Context(), &testpb.Product{Id: "2", Title: "New"}); err != nil {
+		t.Fatal(err)
+	}
+
+	product, meta, err := client.Proto().GetWithMeta[testpb.Product](t.Context(), "1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if product.Title != "Legacy" || meta.Version != codec.V0 || !meta.Timestamp.IsZero() {
+		t.Errorf("wrong legacy read: %v, %+v", product, meta)
+	}
+
+	entries, err := client.Proto().GetManyWithMeta[testpb.Product](t.Context(), []string{"1", "2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 2 || entries[0].Meta.Version != codec.V0 || entries[1].Meta.Version != codec.V1 {
+		t.Errorf("wrong versions: %+v", entries)
+	}
+
+	q, err := client.Query[testpb.Product](t.Context(), []string{"1", "2"}, WithRelation("rank"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; q.Next(); i++ {
+		row, err := q.Scan[testpb.Product]()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		switch i {
+		case 0:
+			if row.GetRank().GetRank() != 7 || q.Meta().Version != codec.V0 {
+				t.Errorf("wrong legacy row: %v, %+v", row, q.Meta())
+			}
+		case 1:
+			if row.Title != "New" || q.Meta().Version != codec.V1 {
+				t.Errorf("wrong new row: %v, %+v", row, q.Meta())
+			}
+		}
+	}
+}
+
+func TestGetWithMeta(t *testing.T) {
+	client := newTestClient(t)
+	before := time.Now()
+
+	if err := client.Proto().Set(t.Context(), &testpb.Product{Id: "1", Title: "One"}); err != nil {
+		t.Fatal(err)
+	}
+
+	product, meta, err := client.Proto().GetWithMeta[testpb.Product](t.Context(), "1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if product.Title != "One" {
+		t.Errorf("wrong title: %v", product.Title)
+	}
+	if meta.Version != codec.V1 || meta.Hash == 0 {
+		t.Errorf("wrong meta: %+v", meta)
+	}
+	if meta.Timestamp.Before(before) || meta.Timestamp.After(time.Now()) {
+		t.Errorf("timestamp out of range: %v", meta.Timestamp)
+	}
+
+	raw, err := client.Get(t.Context(), "product:1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if raw[0] != codec.Magic {
+		t.Errorf("value was not written with a header: %x", raw)
+	}
+}
+
+func TestZBatchStaysLegacy(t *testing.T) {
+	client := newTestClient(t)
+
+	zb := client.NewZBatch()
+	zb.Add("ranks", 1, &testpb.ProductRank{Id: "a", Rank: 1})
+	zb.Add("ranks", 2, &testpb.ProductRank{Id: "a", Rank: 1})
+	if err := zb.Exec(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	members, err := client.ZClient().Range(t.Context(), "ranks")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(members) != 1 || members[0][0] == codec.Magic {
+		t.Errorf("expected one raw member, got: %x", members)
 	}
 }
 

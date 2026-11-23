@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/pckt-sh/protokv/codec"
 	"github.com/pckt-sh/protokv/schema"
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/protobuf/proto"
@@ -29,20 +30,26 @@ type protoMessage[T any] interface {
 // Get allows fetching a protobuf message from the database by primary key, or by
 // indexed value with WithIndex.
 func (p ProtoClient) Get[T any, PM protoMessage[T]](ctx context.Context, key string, opts ...protoOptFn) (PM, error) {
+	msg, _, err := p.GetWithMeta[T, PM](ctx, key, opts...)
+	return msg, err
+}
+
+// GetWithMeta is Get, also returning the metadata stored along the message.
+func (p ProtoClient) GetWithMeta[T any, PM protoMessage[T]](ctx context.Context, key string, opts ...protoOptFn) (PM, codec.Meta, error) {
 	storage, err := schema.GetFromType[PM]()
 	if err != nil {
-		return nil, err
+		return nil, codec.Meta{}, err
 	}
 
 	opt := newProtoOption(opts)
 	if opt.useIndex {
 		keys, err := storage.ResolveIndexes(ctx, p.c.conn, opt.indexKeys, []string{key})
 		if err != nil {
-			return nil, err
+			return nil, codec.Meta{}, err
 		}
 
 		if len(keys) == 0 {
-			return nil, ErrNotFound
+			return nil, codec.Meta{}, ErrNotFound
 		}
 
 		key = keys[0]
@@ -58,17 +65,18 @@ func (p ProtoClient) Get[T any, PM protoMessage[T]](ctx context.Context, key str
 	bytes, err := p.c.conn.Get(ctx, key).Bytes()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
-			return nil, ErrNotFound
+			return nil, codec.Meta{}, ErrNotFound
 		}
-		return nil, err
+		return nil, codec.Meta{}, err
 	}
 
 	msg := PM(new(T))
-	if err := proto.Unmarshal(bytes, msg); err != nil {
-		return nil, err
+	meta, err := codec.Decode(bytes, msg)
+	if err != nil {
+		return nil, codec.Meta{}, err
 	}
 
-	return msg, nil
+	return msg, meta, nil
 }
 
 // GetMany allows fetching multiple protobuf messages at once from the database.
@@ -76,6 +84,16 @@ func (p ProtoClient) Get[T any, PM protoMessage[T]](ctx context.Context, key str
 // Keys are primary keys, or indexed values with WithIndex, like Get. With
 // WithOriginalKeys they are full storage keys. Keys that don't exist are skipped.
 func (p ProtoClient) GetMany[T any, PM protoMessage[T]](ctx context.Context, keys []string, opts ...protoOptFn) ([]PM, error) {
+	entries, err := p.GetManyWithMeta[T, PM](ctx, keys, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	return entryMessages(entries), nil
+}
+
+// GetManyWithMeta is GetMany, also returning the metadata stored along each message.
+func (p ProtoClient) GetManyWithMeta[T any, PM protoMessage[T]](ctx context.Context, keys []string, opts ...protoOptFn) ([]Entry[PM], error) {
 	storage, err := schema.GetFromType[PM]()
 	if err != nil {
 		return nil, err
@@ -104,7 +122,7 @@ func (p ProtoClient) GetMany[T any, PM protoMessage[T]](ctx context.Context, key
 		return nil, err
 	}
 
-	return UnmarshalMany[T, PM](stored)
+	return UnmarshalManyWithMeta[T, PM](stored)
 }
 
 // GetPaginatedMsg returns a list of message with a cursor
@@ -160,7 +178,7 @@ func (p ProtoClient) write(ctx context.Context, msgs []proto.Message) error {
 				return err
 			}
 
-			bytes, err := proto.Marshal(msg)
+			bytes, err := codec.Encode(msg)
 			if err != nil {
 				return err
 			}
@@ -208,12 +226,18 @@ func (p ProtoClient) ZRangeByScoreMany[T any, PM protoMessage[T]](ctx context.Co
 	return result, nil
 }
 
-// UnmarshalMany is a helper to unmarshal multiple proto.Message
+// Entry is a message along with the metadata of its stored value.
+type Entry[PM any] struct {
+	Msg  PM
+	Meta codec.Meta
+}
+
+// UnmarshalMany is a helper to unmarshal multiple stored values, of any version.
 func UnmarshalMany[T any, PM protoMessage[T]](raw []string) ([]PM, error) {
 	msgs := make([]PM, 0, len(raw))
 	for _, r := range raw {
 		msg := PM(new(T))
-		if err := proto.Unmarshal([]byte(r), msg); err != nil {
+		if _, err := codec.Decode([]byte(r), msg); err != nil {
 			return nil, err
 		}
 
@@ -221,6 +245,31 @@ func UnmarshalMany[T any, PM protoMessage[T]](raw []string) ([]PM, error) {
 	}
 
 	return msgs, nil
+}
+
+// UnmarshalManyWithMeta is UnmarshalMany, also returning the metadata of each value.
+func UnmarshalManyWithMeta[T any, PM protoMessage[T]](raw []string) ([]Entry[PM], error) {
+	entries := make([]Entry[PM], 0, len(raw))
+	for _, r := range raw {
+		msg := PM(new(T))
+		meta, err := codec.Decode([]byte(r), msg)
+		if err != nil {
+			return nil, err
+		}
+
+		entries = append(entries, Entry[PM]{msg, meta})
+	}
+
+	return entries, nil
+}
+
+func entryMessages[PM any](entries []Entry[PM]) []PM {
+	msgs := make([]PM, len(entries))
+	for i, e := range entries {
+		msgs[i] = e.Msg
+	}
+
+	return msgs
 }
 
 // ----
