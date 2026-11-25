@@ -175,6 +175,14 @@ func TestQueryRelations(t *testing.T) {
 	if len(rows) != 1 || rows[0].GetRank().GetRank() != 42 {
 		t.Errorf("relation was not loaded, got: %v", rows)
 	}
+
+	meta, ok := q.RelationMeta("rank")
+	if !ok || meta.Version != codec.V1 || meta.Hash == 0 || meta.Timestamp.IsZero() {
+		t.Errorf("wrong relation meta: %+v, %v", meta, ok)
+	}
+	if _, ok := q.RelationMeta("price"); ok {
+		t.Error("meta for a relation that wasn't requested")
+	}
 }
 
 func TestQueryNumericKeys(t *testing.T) {
@@ -278,14 +286,23 @@ func TestReadLegacyValues(t *testing.T) {
 			t.Fatal(err)
 		}
 
+		relMeta, relOK := q.RelationMeta("rank")
+
 		switch i {
 		case 0:
 			if row.GetRank().GetRank() != 7 || q.Meta().Version != codec.V0 {
 				t.Errorf("wrong legacy row: %v, %+v", row, q.Meta())
 			}
+			if !relOK || relMeta.Version != codec.V0 {
+				t.Errorf("wrong legacy relation meta: %+v, %v", relMeta, relOK)
+			}
 		case 1:
 			if row.Title != "New" || q.Meta().Version != codec.V1 {
 				t.Errorf("wrong new row: %v, %+v", row, q.Meta())
+			}
+			// Product 2 has no rank stored: the previous row's meta must not leak.
+			if relOK {
+				t.Errorf("missing relation has meta: %+v", relMeta)
 			}
 		}
 	}

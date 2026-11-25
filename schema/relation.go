@@ -99,19 +99,27 @@ func (r Relation) GetKey(pk string, options map[string]string) string {
 
 // Assign unmarshal and sets the relation on a message
 func (r Relation) Assign(msg proto.Message, buf []byte) error {
+	_, err := r.AssignWithMeta(msg, buf)
+	return err
+}
+
+// AssignWithMeta is Assign, also returning the metadata of the stored value.
+// An empty buf sets an empty message and returns a zero Meta.
+func (r Relation) AssignWithMeta(msg proto.Message, buf []byte) (codec.Meta, error) {
 	rft := msg.ProtoReflect()
 
 	subMsg := r.msgType.New()
 	if len(buf) == 0 { // Set an empty message if buf is empty
 		rft.Set(r.descriptor, protoreflect.ValueOfMessage(subMsg))
 
-		return nil
+		return codec.Meta{}, nil
 	}
 
-	if _, err := codec.Decode(buf, subMsg.Interface()); err != nil {
-		return err
+	meta, err := codec.Decode(buf, subMsg.Interface())
+	if err != nil {
+		return codec.Meta{}, err
 	}
 
 	rft.Set(r.descriptor, protoreflect.ValueOfMessage(subMsg))
-	return nil
+	return meta, nil
 }

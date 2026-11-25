@@ -17,6 +17,7 @@ type Query struct {
 	rows     []QueryRecord
 	cursor   int
 	meta     codec.Meta
+	relMeta  map[string]codec.Meta
 }
 
 type QueryRecord struct {
@@ -100,6 +101,7 @@ func (dq *Query) Next() bool {
 // decode parses the proto.Message
 func (dq *Query) decode(msg proto.Message) error {
 	dq.meta = codec.Meta{}
+	clear(dq.relMeta)
 
 	idx := max(dq.cursor, 0)
 	if idx >= len(dq.rows) {
@@ -128,8 +130,16 @@ func (dq *Query) decode(msg proto.Message) error {
 		}
 
 		b, _ := record.cmd.(*redis.StringCmd).Bytes() // err results in empty byte slice
-		if err := rel.Assign(msg, b); err != nil {
+		meta, err := rel.AssignWithMeta(msg, b)
+		if err != nil {
 			return err
+		}
+
+		if len(b) > 0 {
+			if dq.relMeta == nil {
+				dq.relMeta = make(map[string]codec.Meta, len(dq.rows[idx].relations))
+			}
+			dq.relMeta[record.name] = meta
 		}
 	}
 
@@ -139,6 +149,14 @@ func (dq *Query) decode(msg proto.Message) error {
 // Meta returns the metadata of the row last loaded by Get or Scan.
 func (dq *Query) Meta() codec.Meta {
 	return dq.meta
+}
+
+// RelationMeta returns the metadata of a relation of the row last loaded by
+// Get or Scan. ok is false when the relation wasn't requested with
+// WithRelation, or has no stored value.
+func (dq *Query) RelationMeta(name string) (meta codec.Meta, ok bool) {
+	meta, ok = dq.relMeta[name]
+	return meta, ok
 }
 
 // Get loads a obscure `proto.Message`.
